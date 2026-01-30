@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+motor
+beanie
+pydantic-settings
+python-dotenv
+google-generativeai
