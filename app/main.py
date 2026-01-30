@@ -1,41 +1,40 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
-from app.database import init_db
-from app.routes import decks, auth, teacher, live
-from pathlib import Path
-from fastapi.staticfiles import StaticFiles
+"""
+config.py - Конфигурация приложения
+"""
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    await init_db()
-    print("🚀 Server started!")
-    yield
-    print("👋 Server shutting down...")
+from pydantic_settings import BaseSettings
+from typing import Optional, List
+import os
 
-app = FastAPI(lifespan=lifespan)
+class Settings(BaseSettings):
+    # MongoDB
+    # Если переменной нет, лучше пусть будет пусто, чем localhost (чтобы сразу видеть ошибку)
+    # Но для надежности оставим заглушку, которую надо перекрыть в Render
+    MONGO_URI: str = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+    
+    # Ключи API
+    GOOGLE_API_KEY: Optional[str] = None 
+    UNSPLASH_ACCESS_KEY: Optional[str] = None
+    CLOUDINARY_CLOUD_NAME: str = ""
+    CLOUDINARY_API_KEY: str = ""
+    CLOUDINARY_API_SECRET: str = ""
 
-# Настройка CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["https://makquiz-front.vercel.app"],  # Точный домен фронтенда (добавь "http://localhost:3000" для локального теста)
-    allow_credentials=True,  # Поставь False, если не используешь куки/credentials в fetch
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+    # JWT
+    SECRET_KEY: str = "your-secret-key-change-in-production"
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7
+    
+    # CORS
+    # Добавляем "*" (разрешить всем) и твой Vercel явно
+    ALLOWED_ORIGINS: List[str] = [
+        "http://localhost:3000", 
+        "http://127.0.0.1:3000",
+        "https://makquiz-front.vercel.app",
+        "*"  # <--- ВАЖНО: Разрешает всё (для тестов)
+    ]
+    
+    class Config:
+        env_file = ".env"
+        extra = "ignore"
 
-BASE_DIR = Path(__file__).resolve().parent.parent 
-STATIC_DIR = BASE_DIR / "static"
-STATIC_DIR.mkdir(exist_ok=True)
-
-print(f"📂 Static files served from: {STATIC_DIR}")
-
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-app.include_router(decks.router, prefix="/api/decks", tags=["Decks"])
-app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
-app.include_router(teacher.router, prefix="/api/teacher", tags=["teacher"])
-app.include_router(live.router, prefix="/api/live", tags=["Live"])
-
-@app.get("/")
-async def root():
-    return {"status": "ok"}
+settings = Settings()
