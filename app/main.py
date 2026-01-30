@@ -17,18 +17,15 @@ app = FastAPI(lifespan=lifespan)
 
 # --- ВАЖНО: Настройка CORS ---
 # Мы разрешаем запросы с локалхоста фронтенда
-origins = [
-    "http://localhost:3000",  # Для локальной разработки
-    "https://makquiz-front.vercel.app", # Твой фронтенд на Vercel
-    "https://makquiz-front.vercel.app/" # На всякий случай со слэшем
-]
+app = FastAPI(lifespan=lifespan)
 
+# --- ИСПРАВЛЕНИЕ: Разрешаем всем ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,    # Разрешаем запросы с этих адресов
-    allow_credentials=True,   # Разрешаем куки и авторизацию
-    allow_methods=["*"],      # Разрешаем все методы (GET, POST, PUT, DELETE...)
-    allow_headers=["*"],      # Разрешаем все заголовки
+    allow_origins=["*"],      # <--- СТАВИМ ЗВЕЗДОЧКУ (разрешить всем)
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 BASE_DIR = Path(__file__).resolve().parent.parent 
 STATIC_DIR = BASE_DIR / "static"
