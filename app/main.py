@@ -18,7 +18,8 @@ app = FastAPI(lifespan=lifespan)
 # Настройка CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://makquiz-front.vercel.app"],  # Точный домен фронтенда (добавь "http://localhost:3000" для локального теста)
+    allow_origins=["https://makquiz.site", 
+                   "http://localhost:3000"],  # Точный домен фронтенда (добавь "http://localhost:3000" для локального теста)
     allow_credentials=True,  # Поставь False, если не используешь куки/credentials в fetch
     allow_methods=["*"],
     allow_headers=["*"],
