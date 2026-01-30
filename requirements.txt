@@ -14,3 +14,4 @@ requests==2.32.5
 uvicorn
 python-multipart
 google-genai
+argon2-cffi
