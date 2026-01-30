@@ -1,7 +1,5 @@
 {
   "dependencies": {
-    "node-fetch": "^3.3.2",
-    "react-qr-code": "^2.0.18",
-    "unsplash-js": "^7.0.20"
+    "react-qr-code": "^2.0.18"
   }
 }
