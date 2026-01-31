@@ -475,18 +475,20 @@ async def get_public_decks(
 @router.get("/{deck_id}")
 async def get_deck(
     deck_id: PydanticObjectId,
-    current_user: User = Depends(get_current_user)
+    current_user: Optional[User] = Depends(get_current_user)
 ):
     """Получение информации о колоде"""
     deck = await Deck.get(deck_id)
     if not deck:
         raise HTTPException(status_code=404, detail="Колода не найдена")
     
-    is_owner = deck.user_id == current_user.id
-    has_access = await StudentDeckAccess.find_one(
-        StudentDeckAccess.student_id == current_user.id,
-        StudentDeckAccess.deck_id == deck_id
-    )
+    is_owner = current_user is not None and deck.user_id == current_user.id
+    has_access = False
+    if current_user:
+        has_access = await StudentDeckAccess.find_one(
+            StudentDeckAccess.student_id == current_user.id,
+            StudentDeckAccess.deck_id == deck_id
+        ) is not None
     
     if not is_owner and not has_access and not deck.is_public:
         raise HTTPException(status_code=403, detail="Нет доступа к этой колоде")
@@ -495,17 +497,22 @@ async def get_deck(
     await deck.save()
     
     total = await ContentItem.find(ContentItem.deck_id == deck_id).count()
-    learned = await ContentItem.find(
-        ContentItem.deck_id == deck_id,
-        ContentItem.is_learned == True
-    ).count()
     
-    now = datetime.now()
-    due = await ContentItem.find(
-        ContentItem.deck_id == deck_id,
-        ContentItem.unlock_date <= now,
-        ContentItem.is_learned == False
-    ).count()
+    # Для неавторизованных пользователей или не-владельцев learned и due = 0 (поскольку прогресс личный)
+    learned = 0
+    due = 0
+    if current_user:
+        learned = await ContentItem.find(
+            ContentItem.deck_id == deck_id,
+            ContentItem.is_learned == True
+        ).count()
+        
+        now = datetime.now()
+        due = await ContentItem.find(
+            ContentItem.deck_id == deck_id,
+            ContentItem.unlock_date <= now,
+            ContentItem.is_learned == False
+        ).count()
     
     if total == 0:
         status = "empty"
