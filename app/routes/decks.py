@@ -844,7 +844,108 @@ async def complete_session(
         await daily_stats.save()
     
     return {"message": "Сессия завершена", "session_id": str(session.id)}
+# =====================================================
+# === ПРЕВЬЮ И КЛОНИРОВАНИЕ ===
+# =====================================================
 
+@router.get("/{deck_id}/preview")
+async def get_deck_preview(
+    deck_id: PydanticObjectId,
+    current_user: Optional[User] = Depends(get_current_user)
+):
+    """Превью первых 5 карточек колоды"""
+    deck = await Deck.get(deck_id)
+    if not deck:
+        raise HTTPException(status_code=404, detail="Колода не найдена")
+    
+    # Проверка доступа
+    if not deck.is_public:
+        if not current_user or deck.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Нет доступа")
+    
+    # Получаем первые 5 карточек
+    cards = await ContentItem.find(
+        ContentItem.deck_id == deck_id
+    ).sort(+ContentItem.order).limit(5).to_list()
+    
+    result = []
+    for card in cards:
+        card_dict = {
+            "_id": str(card.id),
+            "front": card.front,
+            "back": card.back,
+            "question": card.question,
+            "options": card.options,
+            "image_url": card.image_url
+        }
+        result.append(card_dict)
+    
+    return {"cards": result}
+
+
+@router.post("/{deck_id}/clone")
+async def clone_deck(
+    deck_id: PydanticObjectId,
+    current_user: User = Depends(get_current_user)
+):
+    """Копирование публичной колоды к себе"""
+    original = await Deck.get(deck_id)
+    if not original:
+        raise HTTPException(status_code=404, detail="Колода не найдена")
+    
+    # Нельзя клонировать свою же колоду
+    if original.user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Это уже ваша колода")
+    
+    # Проверка что колода публичная
+    if not original.is_public:
+        raise HTTPException(status_code=403, detail="Колода приватная")
+    
+    # Создаём копию колоды
+    new_deck = Deck(
+        name=original.name,
+        description=original.description,
+        user_id=current_user.id,
+        author_name=current_user.username,
+        content_type=original.content_type,
+        learning_mode=original.learning_mode,
+        cards_per_day=original.cards_per_day,
+        total_cards=original.total_cards,
+        generation_mode=original.generation_mode,
+        source_info=f"Скопировано от {original.author_name}",
+        is_public=False,  # Копия по умолчанию приватная
+        created_at=datetime.now(),
+        updated_at=datetime.now()
+    )
+    await new_deck.insert()
+    
+    # Копируем все карточки
+    original_cards = await ContentItem.find(
+        ContentItem.deck_id == deck_id
+    ).sort(+ContentItem.order).to_list()
+    
+    for card in original_cards:
+        new_card = ContentItem(
+            deck_id=new_deck.id,
+            item_type=card.item_type,
+            order=card.order,
+            front=card.front,
+            back=card.back,
+            question=card.question,
+            options=card.options,
+            correct_answers=card.correct_answers,
+            explanation=card.explanation,
+            image_query=card.image_query,
+            image_url=card.image_url,
+            unlock_date=datetime.now(),
+            created_at=datetime.now()
+        )
+        await new_card.insert()
+    
+    return {
+        "message": "Колода скопирована",
+        "new_deck_id": str(new_deck.id)
+    }
 
 # =====================================================
 # === СТАТИСТИКА ===
