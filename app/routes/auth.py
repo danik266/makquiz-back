@@ -4,7 +4,8 @@ from pydantic import BaseModel
 from passlib.context import CryptContext
 from app.models import User
 from datetime import datetime, timedelta
-from jose import jwt, JWTError  # Import JWTError from jose
+import jwt
+from jwt.exceptions import PyJWTError as JWTError # Alias it to keep the rest of your code workingor  # Import JWTError from jose
 from typing import Optional
 from app.config import settings  # Assuming settings has SECRET_KEY, ALGORITHM; adjust if needed
 

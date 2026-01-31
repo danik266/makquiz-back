@@ -15,3 +15,4 @@ uvicorn
 python-multipart
 google-genai
 argon2-cffi
+python-jose[cryptography]
