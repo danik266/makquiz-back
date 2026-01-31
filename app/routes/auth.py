@@ -4,26 +4,23 @@ from pydantic import BaseModel
 from passlib.context import CryptContext
 from app.models import User
 from datetime import datetime, timedelta
-import jwt
-import os
+from jose import jwt, JWTError  # Import JWTError from jose
 from typing import Optional
-# Настройки
-SECRET_KEY = "supersecretkey" # В продакшене вынеси в .env
-ALGORITHM = "HS256"
+from app.config import settings  # Assuming settings has SECRET_KEY, ALGORITHM; adjust if needed
+
+# If no settings, fallback to hardcoded (not recommended for prod)
+SECRET_KEY = settings.SECRET_KEY if hasattr(settings, 'SECRET_KEY') else "supersecretkey"
+ALGORITHM = settings.ALGORITHM if hasattr(settings, 'ALGORITHM') else "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7 
 
 router = APIRouter()
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
-# Эта штука нужна FastAPI, чтобы понимать, откуда брать токен (из заголовка Authorization)
+# Strict OAuth2 scheme (raises 401 if no token)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
-# --- МОДЕЛИ ---
-class UserAuth(BaseModel):
-    email: str
-    password: str
-    username: str = None
-    role: str = "student"
+# Optional OAuth2 scheme (does NOT raise 401 if no token)
+optional_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
 # --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
 def get_password_hash(password):
@@ -38,7 +35,7 @@ def create_access_token(data: dict):
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-# --- ГЛАВНАЯ ФУНКЦИЯ ЗАЩИТЫ (Её не хватало!) ---
+# --- ГЛАВНАЯ ФУНКЦИЯ ЗАЩИТЫ ---
 async def get_current_user(token: str = Depends(oauth2_scheme)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -50,31 +47,43 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         email: str = payload.get("sub")
         if email is None:
             raise credentials_exception
-    except jwt.PyJWTError:
+    except JWTError:
         raise credentials_exception
         
     user = await User.find_one(User.email == email)
     if user is None:
         raise credentials_exception
     return user
-async def get_current_user_optional(token: Optional[str] = Depends(oauth2_scheme)) -> Optional[User]:
+
+# --- OPTIONAL USER ---
+async def get_current_user_optional(token: Optional[str] = Depends(optional_oauth2_scheme)) -> Optional[User]:
     """
     Пытается получить текущего пользователя, но не вызывает ошибку, 
-    если токен отсутствует или невалиден. Возвращает None в таком случае.
+    если токен отсутствует. Возвращает None в таком случае.
+    Если токен предоставлен но невалиден, вызывает 401.
     """
     if not token:
         return None
     
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid token",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        user_id: str = payload.get("sub")
-        if user_id is None:
-            return None
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            raise credentials_exception
     except JWTError:
-        return None
+        raise credentials_exception
         
-    user = await User.get(PydanticObjectId(user_id))
+    user = await User.find_one(User.email == email)
+    if user is None:
+        raise credentials_exception
     return user
+
 # --- ЭНДПОИНТЫ ---
 
 @router.post("/register")
@@ -112,3 +121,10 @@ async def login(user_data: UserAuth):
         "username": user.username,
         "role": user.role
     }
+
+# --- SCHEMAS (moved to top for clarity) ---
+class UserAuth(BaseModel):
+    email: str
+    password: str
+    username: str = None
+    role: str = "student"

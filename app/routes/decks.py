@@ -14,7 +14,7 @@ from app.models import (
     User, Deck, Card, ContentItem, StudySession, CardReview, DailyStats,
     StudentDeckAccess, PydanticObjectId
 )
-from app.routes.auth import get_current_user
+from app.routes.auth import get_current_user, get_current_user_optional
 from app.services.ai_service import (
     generate_cards_from_text, generate_cards_from_topic, extract_text_from_file,
     generate_quiz_from_text, generate_quiz_from_topic
@@ -475,7 +475,7 @@ async def get_public_decks(
 @router.get("/{deck_id}")
 async def get_deck(
     deck_id: PydanticObjectId,
-    current_user: Optional[User] = Depends(get_current_user)
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """Получение информации о колоде"""
     deck = await Deck.get(deck_id)
@@ -530,6 +530,7 @@ async def get_deck(
     deck_dict["cards_due"] = due
     deck_dict["status"] = status
     deck_dict["is_owner"] = is_owner
+    deck_dict["is_author"] = is_owner  # For frontend compatibility
     
     return deck_dict
 
@@ -858,7 +859,7 @@ async def complete_session(
 @router.get("/{deck_id}/preview")
 async def get_deck_preview(
     deck_id: PydanticObjectId,
-    current_user: Optional[User] = Depends(get_current_user)
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """Превью первых 5 карточек колоды"""
     deck = await Deck.get(deck_id)
